@@ -1,9 +1,3 @@
----
-title: LEI
-created: '2020-05-03T18:13:37.678Z'
-modified: '2020-05-03T20:03:46.067Z'
----
-
 # LEI
 
 ## Image datasets
