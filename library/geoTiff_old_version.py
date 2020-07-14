@@ -2,13 +2,10 @@ from osgeo import gdal
 from osgeo import osr
 import numpy as np 
 import os, sys
-#from tensorflow.keras.models import load_model
 from random import seed,uniform
+from tensorflow.keras.models import load_model
 import json
 import cv2
-import math
-from math import cos
-#from RiskLocation import acess_risk_location
 
 def getImageBing(name,latitude,longitude,SaveLoc):
     key = "Aqk4d8d5q_eWvI3oGYPNI-NdIuS5fEt3U-AnDWxNAzyM2Dn_v2vn2BbgD_8F-jIh"
@@ -28,27 +25,48 @@ def meters_to_lat(meters,latitude):
     return meters/latitude_meters
 
 
+class danger():
+    error = 0
+    no_danger = 1
+    level1 = 2
+    level2 = 3
+    level3 = 4
+
 def read_settings(f):
     with open(f) as fp:
         settings = json.load(fp)['settings']
     model1 = settings['model1']
     model2 = settings['model2']
+    autoencoder = settings['autoencoder']
     cell_x = settings["cell_size_x"]
     cell_y = settings["cell_size_y"]
 
     model1 = load_model(model1)
     model2 = load_model(model2)
+    autoencoder = load_model(autoencoder)
 
-    return (model1,model2,cell_x,cell_y)
+    return (model1,model2,autoencoder,cell_x,cell_y)
 
+def calc_risk_img(img,model1,model2,accuracy="low"):
+    low_precision_risk = model1.predict(img)
+    print(low_risk)
+    if(accuracy == "low"):
+        return low_precision_risk
+    else:
+        if low_precision_risk == 0:
+            return low_precision_risk
 
-def get_loc_img(cell_sizex,cell_sizey,height,width,lat_max,lat_min,lon_max,lon_min,lon,lat):
+        else:
+            high_precision_risk = model2.predict(img)
+            return high_precision_risk
+
+def get_img_loc(img,grid_sizex,grid_sizey,height,width,lat_max,lat_min,lon_max,lon_min,lon,lat):
     
     latmin_rat = (lat  - lat_min) / (lat_max - lat_min) 
     lonmin_rat = (lon - lon_min) / (lon_max - lon_min)
 
-    latmax_rat = (lat + meters_to_lat(cell_sizey,lat) - lat_min) / (lat_max - lat_min)
-    lonmax_rat = (lon + meters_to_lon(cell_sizex,lat) - lon_min) / (lon_max - lon_min)
+    latmax_rat = (lat + meters_to_lat(grid_sizey,lat) - lat_min) / (lat_max - lat_min)
+    lonmax_rat = (lon + meters_to_lon(grid_sizex,lat) - lon_min) / (lon_max - lon_min)
 
     img_min_height = min(latmin_rat * height, height)
     img_max_height = min(latmax_rat * height,height)
@@ -57,45 +75,68 @@ def get_loc_img(cell_sizex,cell_sizey,height,width,lat_max,lat_min,lon_max,lon_m
     img_min_width = min(lonmin_rat * width, width)
     img_max_width = min(lonmax_rat * width, width)
 
+    new_img = img[img_min_height:img_max_height,img_min_width:img_max_width]
 
-    return (img_min_height,img_min_width,img_max_height,img_max_width)   
+    return (new_img,img_min_height,img_min_width,img_max_height,img_max_width)   
 
-def calculate_risks(cell_sizex,cell_sizey,height,
+def calculate_risks(img,grid_sizex,grid_sizey,height,
                         width,lat_max,lat_min,lon_max,lon_min,
-                            model1,model2,accuracy="detailed"):
+                            model1,model1,accuracy="low"):
 
 
     risks = dict()
 
     curr_lat = lat_min
-    cells = 0
+
     while(curr_lat < lat_max):
         curr_lon = lon_min
         
-        lon_incr =  meters_to_lon(cell_sizey,curr_lat)
-        lat_incr =  meters_to_lat(cell_sizex,curr_lat) 
+        lon_incr =  meters_to_lon(grid_sizey,curr_lat)
+        lat_incr =  meters_to_lat(grid_sizex,curr_lat) 
 
         while(curr_lon < lon_max):
-            min_height,min_width,max_height,max_width = get_loc_img(cell_sizex,cell_sizey,
+            new_img,min_height,min_width,max_height,max_width = get_img_loc(img,grid_sizex,grid_sizey,
                 height,width,lat_max,lat_min,lon_max,lon_min,curr_lon,curr_lat)
             
-            risk = acess_risk_location(curr_lat,curr_lon,model1,model2,accuracy)
+            risk = calc_risk_img(img,model1,model2,accuracy)
             
-            risk = risk[f"{accuracy} accuracy"]
-            print(risk)
-
             if not risk in risks:
                 risks[risk] = list()
 
             risks[risk].append((min_height,min_width,max_height,max_width))
-            cells += 1
+
             curr_lon += lon_incr
 
         curr_lat += lat_incr
-    print(cells)
-    return risks
 
-def create_geoTiff(risks,image_size = (1024,1024),lat=(36,41),lon=(-7,-5),filename="default.tif",accuracy="detailed"):
+    return risks
+    
+def position_risk(risk_low_acc,risk_high_acc,lat,lon,accuracy="low"):
+    if accuracy == "low":
+        return int(uniform(0,2))
+    else:
+        return int(uniform(0,5))
+
+
+def get_coordinates(height,width,x,y,lat_max,lat_min,lon_max,lon_min):
+    portion_x = x / width
+    portion_y = y / height
+
+    lat = y * (lat_max - lat_min)
+    lon = x * (lon_max - lon_min)
+
+    return (lat,lon)
+    
+def zoning_delimitations(height,width,x,y,lat_max,lat_min,lon_max,lon_min):
+    safe = list()
+    danger = list()
+    level1 = list()
+    level2 = list()
+    level3 = list()
+
+
+    
+def create_geoTiff(image_size = (1024,1024),lat=(36,41),lon=(-7,-5),filename="default.tif",risks):
     
     lat_min,lat_max = lat
     lon_min,lon_max = lon
@@ -105,17 +146,17 @@ def create_geoTiff(risks,image_size = (1024,1024),lat=(36,41),lon=(-7,-5),filena
     g_pixels = np.zeros((image_size),dtype=np.uint8)
     b_pixels = np.zeros((image_size),dtype=np.uint8)
 
-    colors = {"": (0,0,0),"0": (0, 153, 255),
-                "1": (255, 255, 102),"2": (255, 102, 0),
-                    "3": (255, 0, 0)}
+    colors = {danger.error: (0,0,0),danger.no_danger: (0, 153, 255),
+                danger.level1: (255, 255, 102),danger.level2: (255, 102, 0),
+                    danger.level3: (255, 0, 0)}
 
 
     for risk in risks:
         for cell in risks[risk]:
             min_height,min_width,max_height,max_width = cell
             
-            for x in range(int(min_width),int(max_width)):
-                for y in range(int(min_height),int(max_height)):
+            for x in range(min_width,max_width):
+                for y in range(min_height,max_height):
                     r,g,b = colors.get(risk,(255,255,255))
                     r_pixels[y,x] = r
                     g_pixels[y,x] = g
@@ -161,51 +202,19 @@ def get_square(geofile):
 
 ##create_geoTiff(image_size=(2048,512))
 
-def RiskLocationsFromLocation(GeoFile,out_loc="default.json",size=(512,512),accuracy="detailed"):
-    model1,model2,cell_x,cell_y = read_settings("settings.json")
-    height,width = size
-
-    lon_min,lon_max,lat_min,lat_max = get_square(GeoFile)
+def RiskMapFromGeoJson(GeoFile,out_loc=None,size=(512,512),out="GeoTiff"):
     
-    risks = calculate_risks(cell_x,cell_y,height,
+    lon_min,lon_max,lat_min,lat_max = get_square(GeoFile)
+    risks = calculate_risks(img,grid_sizex,grid_sizey,height,
                         width,lat_max,lat_min,lon_max,lon_min,
-                            model1,model2,accuracy="detailed")
-    ##print(risks)  
+                            model1,model1,accuracy="low")
+    if out == "GeoTiff":
 
-    with open(out_loc,"w") as f:
-        json.dump(risks,f)
-
-
-def RiskMapFromLocation(GeoFile,out_loc="default.tif",size=(1024,1024),accuracy="detailed"):
-    model1,model2,cell_x,cell_y = read_settings("settings.json")
-
-    height,width = size
-
-   
-    
-    lon_min,lon_max,lat_min,lat_max = get_square(GeoFile)
-    
-    risks = calculate_risks(cell_x,cell_y,height,
-                        width,lat_max,lat_min,lon_max,lon_min,
-                            model1,model2,accuracy="detailed")
-    print(risks)    
-
-def RiskMapFromRiskLocations(GeoFile,risks_loc="default.json",out_loc="default.tif",size=(512,512),accuracy="detailed"):
-    
-    height,width = size
-
-    lon_min,lon_max,lat_min,lat_max = get_square(GeoFile)
-    
-    with open(risks_loc,"r") as f:
-        risks = json.load(f)
-    
-    create_geoTiff(risks,image_size = size,lat=(lat_min,lat_max),lon=(lon_min,lon_max),filename=out_loc,accuracy=accuracy)
-    print(risks)      
+    else:       
     
 def main():
-    ##model1,model2,autoencoder,cell_x,cell_y = read_settings("settings.json")
+    #model1,model2,autoencoder,cell_x,cell_y = read_settings("settings.json")
     print("1")
-    ##RiskLocationsFromLocation("braga_example.geojson")
-    RiskMapFromRiskLocations("braga_example.geojson",out_loc="default.tif",size=(512,512),accuracy="detailed")
+    print(read_settings("settings.json"))
 
 main()
