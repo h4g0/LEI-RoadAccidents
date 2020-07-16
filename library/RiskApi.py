@@ -2,7 +2,9 @@ from flask import Flask
 from flask_restful import Resource,Api
 from RiskLocation import acess_risk_location
 from tensorflow.keras.models import load_model
+import tensorflow as tf
 import json
+import os
 
 app = Flask("__accident_risk_api__")
 api = Api(app)
@@ -33,6 +35,9 @@ api.add_resource(PredictRisk, '/risk_prediction_lat=<latitude>_lon=<longitude>')
 
 key = "Aqk4d8d5q_eWvI3oGYPNI-NdIuS5fEt3U-AnDWxNAzyM2Dn_v2vn2BbgD_8F-jIh"
 model1,model2,_,_ = read_settings("settings.json")
+
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
+
 
 if __name__ == "__main__":    
     print("loaded model")
