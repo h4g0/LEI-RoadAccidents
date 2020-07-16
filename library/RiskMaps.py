@@ -2,13 +2,13 @@ from osgeo import gdal
 from osgeo import osr
 import numpy as np 
 import os, sys
-#from tensorflow.keras.models import load_model
+from tensorflow.keras.models import load_model
 from random import seed,uniform
 import json
 import cv2
 import math
 from math import cos
-#from RiskLocation import acess_risk_location
+from RiskLocation import acess_risk_location
 
 def getImageBing(name,latitude,longitude,SaveLoc):
     key = "Aqk4d8d5q_eWvI3oGYPNI-NdIuS5fEt3U-AnDWxNAzyM2Dn_v2vn2BbgD_8F-jIh"
@@ -82,7 +82,7 @@ def calculate_risks(cell_sizex,cell_sizey,height,
             risk = acess_risk_location(curr_lat,curr_lon,model1,model2,accuracy)
             
             risk = risk[f"{accuracy} accuracy"]
-            print(risk)
+            ##print(risk)
 
             if not risk in risks:
                 risks[risk] = list()
@@ -92,7 +92,7 @@ def calculate_risks(cell_sizex,cell_sizey,height,
             curr_lon += lon_incr
 
         curr_lat += lat_incr
-    print(cells)
+    ##print(cells)
     return risks
 
 def create_geoTiff(risks,image_size = (1024,1024),lat=(36,41),lon=(-7,-5),filename="default.tif",accuracy="detailed"):
@@ -105,8 +105,8 @@ def create_geoTiff(risks,image_size = (1024,1024),lat=(36,41),lon=(-7,-5),filena
     g_pixels = np.zeros((image_size),dtype=np.uint8)
     b_pixels = np.zeros((image_size),dtype=np.uint8)
 
-    colors = {"": (0,0,0),"0": (0, 153, 255),
-                "1": (255, 255, 102),"2": (255, 102, 0),
+    colors = {"": (0,0,0),"0":  (0, 255, 0),
+                "1": (255, 153, 0),"2": (255, 51, 0),
                     "3": (255, 0, 0)}
 
 
@@ -116,7 +116,7 @@ def create_geoTiff(risks,image_size = (1024,1024),lat=(36,41),lon=(-7,-5),filena
             
             for x in range(int(min_width),int(max_width)):
                 for y in range(int(min_height),int(max_height)):
-                    r,g,b = colors.get(risk,(255,255,255))
+                    b,g,r = colors.get(risk,(255,255,255))
                     r_pixels[y,x] = r
                     g_pixels[y,x] = g
                     b_pixels[y,x] = b
@@ -124,14 +124,14 @@ def create_geoTiff(risks,image_size = (1024,1024),lat=(36,41),lon=(-7,-5),filena
     xres = (lon_max - lon_min) / width
     yres = (lat_max - lat_min) / height
 
-    print(r_pixels)
-    print(g_pixels)
-    print(b_pixels)
+    ##print(r_pixels)
+    ##print(g_pixels)
+    ##print(b_pixels)
     
     geotransform = (lon_min, xres, 0, lat_max, 0, -yres)
 
     
-    dst_ds = gdal.GetDriverByName('GTiff').Create(filename, width, height, 3, gdal.GDT_Byte)
+    dst_ds = gdal.GetDriverByName('GTiff').Create(filename, height, width, 3, gdal.GDT_Byte)
     
     dst_ds.SetGeoTransform(geotransform)         
     srs = osr.SpatialReference()            
@@ -150,7 +150,7 @@ def get_square(geofile):
     lon_min,lon_max,lat_min,lat_max = math.inf,-math.inf,math.inf,-math.inf
     
     for i in geodict['features'][0]['geometry']['coordinates'][0]:
-        print(i)
+        ##print(i)
         if i[0] < lon_min: lon_min=i[0]
         if i[0] > lon_max: lon_max=i[0]
         if i[1] < lat_min: lat_min=i[1]
@@ -161,8 +161,9 @@ def get_square(geofile):
 
 ##create_geoTiff(image_size=(2048,512))
 
-def RiskLocationsFromLocation(GeoFile,out_loc="default.json",size=(512,512),accuracy="detailed"):
-    model1,model2,cell_x,cell_y = read_settings("settings.json")
+def RiskLocationsFromLocation(GeoFile,out_loc="default.json",size=(1024,1024),accuracy="detailed"):
+    global model1,model2,cell_x,cell_y
+
     height,width = size
 
     lon_min,lon_max,lat_min,lat_max = get_square(GeoFile)
@@ -170,14 +171,13 @@ def RiskLocationsFromLocation(GeoFile,out_loc="default.json",size=(512,512),accu
     risks = calculate_risks(cell_x,cell_y,height,
                         width,lat_max,lat_min,lon_max,lon_min,
                             model1,model2,accuracy="detailed")
-    ##print(risks)  
 
     with open(out_loc,"w") as f:
         json.dump(risks,f)
 
 
 def RiskMapFromLocation(GeoFile,out_loc="default.tif",size=(1024,1024),accuracy="detailed"):
-    model1,model2,cell_x,cell_y = read_settings("settings.json")
+    global model1,model2,cell_x,cell_y
 
     height,width = size
 
@@ -188,9 +188,10 @@ def RiskMapFromLocation(GeoFile,out_loc="default.tif",size=(1024,1024),accuracy=
     risks = calculate_risks(cell_x,cell_y,height,
                         width,lat_max,lat_min,lon_max,lon_min,
                             model1,model2,accuracy="detailed")
-    print(risks)    
+        
+    create_geoTiff(risks,image_size = size,lat=(lat_min,lat_max),lon=(lon_min,lon_max),filename=out_loc,accuracy=accuracy)
 
-def RiskMapFromRiskLocations(GeoFile,risks_loc="default.json",out_loc="default.tif",size=(512,512),accuracy="detailed"):
+def RiskMapFromRiskLocations(GeoFile,risks_loc="default.json",out_loc="default.tif",size=(1024,1024),accuracy="detailed"):
     
     height,width = size
 
@@ -200,12 +201,16 @@ def RiskMapFromRiskLocations(GeoFile,risks_loc="default.json",out_loc="default.t
         risks = json.load(f)
     
     create_geoTiff(risks,image_size = size,lat=(lat_min,lat_max),lon=(lon_min,lon_max),filename=out_loc,accuracy=accuracy)
-    print(risks)      
-    
+
+def load_models_and_settings(setting_file="settings.json"):
+    global model1,model2,cell_x,cell_y
+
+    model1,model2,cell_x,cell_y = read_settings("settings.json")
+
+
 def main():
     ##model1,model2,autoencoder,cell_x,cell_y = read_settings("settings.json")
-    print("1")
     ##RiskLocationsFromLocation("braga_example.geojson")
     RiskMapFromRiskLocations("braga_example.geojson",out_loc="default.tif",size=(512,512),accuracy="detailed")
 
-main()
+##main()

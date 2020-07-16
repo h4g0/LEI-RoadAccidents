@@ -1,7 +1,7 @@
 {
     "settings":{
-        "model1": "trained_models/mobilenet_v2.hdf5",
-        "model2": "trained_models/mobilenet_v2.hdf5",
+        "model1": "trained_models/inceptionv3_tl.hdf5",
+        "model2": "trained_models/inception_v3_da_dataset2.hdf5",
         "cell_size_x": 200,
         "cell_size_y": 200
     }
