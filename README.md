@@ -1,9 +1,3 @@
----
-title: LEI
-created: '2020-05-03T18:13:37.678Z'
-modified: '2020-08-02T20:30:19.956Z'
----
-
 # LEI
 This project's main goal is to apply machine learning to road accident predictions using aerial or satellite imagery in the Portuguese mainland. The strategy used consisted of dividing the area of study in 200mx200m squares and use the data taken from the <em>Autoridade Nacional da Proteção Civil</em>(Portugal)[^1] API and downloaded using the tools made available in this repository[^2].
 The data gathered consisted of occurrences of various accidents in the Portuguese mainland from early 2016 to march 2020. The incidents not directly related to road accident risk were removed from the gathered dataset and the resulting dataset was cleaned and processed to allow for easier used and data exploration.
